@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>N Clock — Full</title>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#000000">
+
+<style>
+:root{
+  --bg:#000;
+  --text:#fff;
+  --accent:#0a84ff;
+  --muted:#888;
+  --shadow:0 6px 18px rgba(10,10,10,0.15);
+}
+
+/* layout */
+html,body{
+  margin:0;
+  height:100%;
+  font-family:-apple-system,BlinkMacSystemFont;
+  background:var(--bg);
+  color:var(--text);
+}
+.wrap{
+  min-height:100vh;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  padding:24px;
+  gap:26px;
+}
+
+/* big display */
+.time-display{
+  font-size:calc(38px + 12vw);
+  font-weight:600;
+  line-height:1;
+  letter-spacing:3px;
+  margin-top:20px;
+}
+
+/* slider */
+.slider-box{
+  width:min(760px,96%);
+}
+.label-row{
+  display:flex;
+  justify-content:space-between;
+  font-size:16px;
+  color:var(--muted);
+}
+
+/* thick range */
+input[type="range"]{
+  -webkit-appearance:none;
+  width:100%;
+  height:14px;
+  background:#444;
+  border-radius:10px;
+}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:36px;height:36px;border-radius:50%;
+  background:var(--text);
+  border:4px solid #111;
+  box-shadow:var(--shadow);
+  margin-top:-11px;
+}
+
+/* tabs */
+.tabs{
+  display:flex;
+  gap:8px;
+  padding:6px;
+  border-radius:14px;
+  background:#111;
+}
+.tabs button{
+  padding:12px 26px;
+  border:none;
+  border-radius:10px;
+  background:transparent;
+  color:var(--text);
+  font-weight:600;
+  cursor:pointer;
+}
+.tabs button.active{
+  background:var(--text);
+  color:var(--bg);
+  box-shadow:var(--shadow);
+}
+
+/* stopwatch buttons */
+.controls{
+  display:flex;
+  gap:18px;
+  justify-content:center;
+}
+.btn-circle{
+  width:88px;height:88px;
+  border-radius:50%;
+  display:grid;place-items:center;
+  font-weight:700;
+  border:none;
+  cursor:pointer;
+}
+.btn-start{background:#34c759;color:#000;}
+.btn-stop{background:#ff3b30;}
+.btn-lap,.btn-reset{
+  width:64px;height:64px;
+  border-radius:12px;
+  background:#222;
+  color:var(--text);
+  border:1px solid #444;
+  font-size:14px;
+}
+.laps{
+  width:min(760px,96%);
+  max-height:220px;
+  overflow:auto;
+  border-top:1px solid #333;
+  padding-top:10px;
+  font-size:15px;
+  color:var(--muted);
+}
+
+/* Alarm */
+#alarmControls{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  margin-top:10px;
+}
+#alarmTime{
+  background:#111;color:#fff;
+  font-size:28px;
+  padding:10px 14px;
+  border-radius:10px;
+  border:1px solid #444;
+}
+
+/* iPhone-like toggle */
+.switch{
+  position:relative;
+  width:60px;height:34px;
+}
+.switch input{opacity:0;width:0;height:0;}
+.slider-toggle{
+  position:absolute;cursor:pointer;inset:0;
+  background:#444;border-radius:34px;
+  transition:.3s;
+}
+.slider-toggle:before{
+  content:"";position:absolute;
+  width:26px;height:26px;
+  left:4px;bottom:4px;
+  background:#fff;border-radius:50%;
+  transition:.3s;
+}
+input:checked + .slider-toggle{
+  background:var(--accent);
+}
+input:checked + .slider-toggle:before{
+  transform:translateX(26px);
+}
+
+.hidden{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div id="display" class="time-display">00:00:00</div>
+
+<!-- Slider -->
+<div class="slider-box">
+  <div class="label-row">
+    <div>1日の長さ</div>
+    <div id="labelHours">24 時間</div>
+  </div>
+  <input id="sliderHours" type="range" min="12" max="48" step="1" value="24">
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button id="tabClock" class="active">時計</button>
+  <button id="tabStopwatch">ストップウォッチ</button>
+  <button id="tabAlarm">アラーム</button>
+</div>
+
+<!-- Stopwatch -->
+<div id="stopwatchArea" class="hidden">
+  <div class="controls">
+    <button id="startBtn" class="btn-circle btn-start">Start</button>
+    <button id="lapBtn" class="btn-lap" disabled>Lap</button>
+    <button id="resetBtn" class="btn-reset" disabled>Reset</button>
+  </div>
+  <div class="laps" id="laps"></div>
+</div>
+
+<!-- Alarm -->
+<div id="alarmControls" class="hidden">
+  <input type="time" id="alarmTime" value="07:00">
+  <label class="switch">
+    <input type="checkbox" id="alarmToggle">
+    <span class="slider-toggle"></span>
+  </label>
+</div>
+
+</div>
+
+<script>
+/* state */
+const slider = document.getElementById('sliderHours');
+const display = document.getElementById('display');
+const labelHours = document.getElementById('labelHours');
+
+const tabClock = document.getElementById('tabClock');
+const tabStopwatch = document.getElementById('tabStopwatch');
+const tabAlarm = document.getElementById('tabAlarm');
+
+const swArea = document.getElementById('stopwatchArea');
+const alarmControls = document.getElementById('alarmControls');
+
+const startBtn = document.getElementById('startBtn');
+const lapBtn = document.getElementById('lapBtn');
+const resetBtn = document.getElementById('resetBtn');
+const lapsDiv = document.getElementById('laps');
+
+const alarmTime = document.getElementById('alarmTime');
+const alarmToggle = document.getElementById('alarmToggle');
+
+let mode = localStorage.getItem("nclock_mode") || "clock";
+let customHours = Number(localStorage.getItem("nclock_hours")) || 24;
+slider.value = customHours;
+labelHours.textContent = `${customHours} 時間`;
+
+let elapsedMs = Number(localStorage.getItem("nclock_elapsed")) || 0;
+let running = false;
+let laps = JSON.parse(localStorage.getItem("nclock_laps")||"[]");
+
+let alarmOn = localStorage.getItem("nclock_alarmOn")==="1";
+alarmToggle.checked = alarmOn;
+
+function switchMode(newMode){
+  mode = newMode;
+  [tabClock,tabStopwatch,tabAlarm].forEach(b=>b.classList.remove("active"));
+  swArea.classList.add("hidden");
+  alarmControls.classList.add("hidden");
+
+  if(mode==="clock") tabClock.classList.add("active");
+  if(mode==="stopwatch"){ tabStopwatch.classList.add("active"); swArea.classList.remove("hidden"); }
+  if(mode==="alarm"){ tabAlarm.classList.add("active"); alarmControls.classList.remove("hidden"); }
+  save();
+}
+switchMode(mode);
+
+/* save */
+function save(){
+  localStorage.setItem("nclock_mode",mode);
+  localStorage.setItem("nclock_hours",String(customHours));
+  localStorage.setItem("nclock_elapsed",String(elapsedMs));
+  localStorage.setItem("nclock_laps",JSON.stringify(laps));
+  localStorage.setItem("nclock_alarmOn",alarmToggle.checked?"1":"0");
+  localStorage.setItem("nclock_alarmTime",alarmTime.value);
+}
+
+alarmTime.value = localStorage.getItem("nclock_alarmTime") || "07:00";
+
+/* events */
+slider.oninput = ()=>{ customHours = Number(slider.value); labelHours.textContent=`${customHours} 時間`; save(); };
+
+tabClock.onclick = ()=>switchMode("clock");
+tabStopwatch.onclick = ()=>switchMode("stopwatch");
+tabAlarm.onclick = ()=>switchMode("alarm");
+
+startBtn.onclick = ()=>{
+  running=!running;
+  if(running){
+    startBtn.textContent="Stop";
+    startBtn.classList.remove("btn-start");
+    startBtn.classList.add("btn-stop");
+    lapBtn.disabled=false;
+    resetBtn.disabled=true;
+    lastPerf=performance.now();
+  }else{
+    startBtn.textContent="Start";
+    startBtn.classList.add("btn-start");
+    startBtn.classList.remove("btn-stop");
+    lapBtn.disabled=true;
+    resetBtn.disabled=false;
+    save();
+  }
+};
+
+lapBtn.onclick = ()=>{ laps.unshift(display.textContent); renderLaps(); save(); };
+resetBtn.onclick = ()=>{ elapsedMs=0;laps=[];renderLaps();save(); };
+
+alarmToggle.onchange = save;
+
+/* render laps */
+function renderLaps(){
+  if(!laps.length){
+    lapsDiv.innerHTML="<div>ラップなし</div>";
+    return;
+  }
+  lapsDiv.innerHTML=laps.map((v,i)=>`<div>Lap ${laps.length-i} — ${v}</div>`).join("");
+}
+renderLaps();
+
+/* animation */
+let lastPerf = performance.now();
+function tick(now){
+  if(running){
+    const dt = now-lastPerf;
+    elapsedMs += dt*(24/customHours);
+    lastPerf=now;
+  }
+
+  let h,m,s;
+  if(mode==="clock" || mode==="alarm"){
+    const d=new Date();
+    let sec=d.getHours()*3600+d.getMinutes()*60+d.getSeconds();
+    sec*=24/customHours;
+    h=Math.floor(sec/3600)%24;
+    m=Math.floor(sec/60)%60;
+    s=Math.floor(sec)%60;
+  }else{
+    const sec=Math.floor(elapsedMs/1000);
+    h=Math.floor(sec/3600);
+    m=Math.floor(sec/60)%60;
+    s=sec%60;
+  }
+  display.textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+  checkAlarm(h,m);
+
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* alarm checker */
+function checkAlarm(h,m){
+  if(!alarmToggle.checked) return;
+  const [ah,am]=alarmTime.value.split(":").map(Number);
+  if(h===ah && m===am && new Date().getSeconds()===0){
+    alert("⏰ アラーム！ 起きる時間です！");
+    alarmToggle.checked=false;
+    save();
+  }
+}
+
+/* SW */
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("/sw.js");
+}
+</script>
+</body>
+</html>
